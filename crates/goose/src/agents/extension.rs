@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use mcp_client::client::Error as ClientError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::warn;
 use utoipa::ToSchema;
 
 use crate::config;
