@@ -96,10 +96,10 @@ impl Envs {
     }
 
     /// Returns an error if any disallowed env var is present
-    pub fn validate(&self) -> Result<(), ExtensionError> {
+    pub fn validate(&self) -> Result<(), Box<ExtensionError>> {
         for key in self.map.keys() {
             if Self::is_disallowed(key) {
-                return Err(ExtensionError::InvalidEnvVar(key.clone()));
+                return Err(Box::new(ExtensionError::InvalidEnvVar(key.clone())));
             }
         }
         Ok(())
