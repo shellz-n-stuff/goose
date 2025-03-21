@@ -35,26 +35,23 @@ pub struct Envs {
 
 impl Envs {
     /// List of sensitive env vars that should not be overridden
-    const DISALLOWED_KEYS: [&'static str; 30] = [
+    const DISALLOWED_KEYS: [&'static str; 31] = [
         // 🔧 Binary path manipulation
-        "PATH",         // Controls executable lookup paths — critical for command hijacking
-        "PATHEXT",      // Windows: Determines recognized executable extensions (e.g., .exe, .bat)
-        "SystemRoot",   // Windows: Can affect system DLL resolution (e.g., `kernel32.dll`)
-        "windir",       // Windows: Alternative to SystemRoot (used in legacy apps)
-
+        "PATH",       // Controls executable lookup paths — critical for command hijacking
+        "PATHEXT",    // Windows: Determines recognized executable extensions (e.g., .exe, .bat)
+        "SystemRoot", // Windows: Can affect system DLL resolution (e.g., `kernel32.dll`)
+        "windir",     // Windows: Alternative to SystemRoot (used in legacy apps)
         // 🧬 Dynamic linker hijacking (Linux/macOS)
-        "LD_LIBRARY_PATH", // Alters shared library resolution
-        "LD_PRELOAD",      // Forces preloading of shared libraries — common attack vector
-        "LD_AUDIT",        // Loads a monitoring library that can intercept execution
-        "LD_DEBUG",        // Enables verbose linker logging (information disclosure risk)
-        "LD_BIND_NOW",     // Forces immediate symbol resolution, affecting ASLR
+        "LD_LIBRARY_PATH",  // Alters shared library resolution
+        "LD_PRELOAD",       // Forces preloading of shared libraries — common attack vector
+        "LD_AUDIT",         // Loads a monitoring library that can intercept execution
+        "LD_DEBUG",         // Enables verbose linker logging (information disclosure risk)
+        "LD_BIND_NOW",      // Forces immediate symbol resolution, affecting ASLR
         "LD_ASSUME_KERNEL", // Tricks linker into thinking it’s running on an older kernel
-
         // 🍎 macOS dynamic linker variables
         "DYLD_LIBRARY_PATH",     // Same as LD_LIBRARY_PATH but for macOS
         "DYLD_INSERT_LIBRARIES", // macOS equivalent of LD_PRELOAD
         "DYLD_FRAMEWORK_PATH",   // Overrides framework lookup paths
-
         // 🐍 Python / Node / Ruby / Java / Golang hijacking
         "PYTHONPATH",   // Overrides Python module resolution
         "PYTHONHOME",   // Overrides Python root directory
@@ -64,18 +61,18 @@ impl Envs {
         "GEM_HOME",     // Changes RubyGems default install location
         "CLASSPATH",    // Java: Controls where classes are loaded from — critical for RCE attacks
         "GO111MODULE",  // Go: Forces use of module proxy or disables it
-        "GOROOT",       // Go: Changes root installation directory (could lead to execution hijacking)
-
+        "GOROOT", // Go: Changes root installation directory (could lead to execution hijacking)
         // 🖥️ Windows-specific process & DLL hijacking
-        "APPINIT_DLLS",      // Forces Windows to load a DLL into every process
-        "SESSIONNAME",       // Affects Windows session configuration
-        "ComSpec",           // Determines default command interpreter (can replace `cmd.exe`)
-        "TEMP", "TMP",       // Redirects temporary file storage (useful for injection attacks)
-        "LOCALAPPDATA",      // Controls application data paths (can be abused for persistence)
-        "USERPROFILE",       // Windows user directory (can affect profile-based execution paths)
-        "HOMEDRIVE", "HOMEPATH", // Changes where the user's home directory is located
+        "APPINIT_DLLS", // Forces Windows to load a DLL into every process
+        "SESSIONNAME",  // Affects Windows session configuration
+        "ComSpec",      // Determines default command interpreter (can replace `cmd.exe`)
+        "TEMP",
+        "TMP",          // Redirects temporary file storage (useful for injection attacks)
+        "LOCALAPPDATA", // Controls application data paths (can be abused for persistence)
+        "USERPROFILE",  // Windows user directory (can affect profile-based execution paths)
+        "HOMEDRIVE",
+        "HOMEPATH", // Changes where the user's home directory is located
     ];
-
 
     /// Constructs a new Envs, skipping disallowed env vars with a warning
     pub fn new(map: HashMap<String, String>) -> Self {
