@@ -81,7 +81,7 @@ impl PromptInjectionScanner {
             .is_secondary_tool_violation_single(tool_call, messages, &disabled_secondary_tool_list)
             .await
         {
-            tracing::info!("Secondary tool violation detected for tool '{}'", tool_call.name);
+            tracing::warn!("Secondary tool violation detected for tool '{}'", tool_call.name);
             return Ok(ScanResult {
                 is_malicious: true,
                 confidence: 1.0,
@@ -181,15 +181,15 @@ impl PromptInjectionScanner {
     ) -> bool {
         let tool_name = tool_call.name.as_str();
         if !disabled_secondary_tool_list.iter().any(|t| t == tool_name) {
-            tracing::info!(tool_name, "Tool '{}' not in disabled list; skipping", tool_name);
+            tracing::debug!(tool_name, "Tool '{}' not in disabled list; skipping", tool_name);
             return false;
         }
 
-        tracing::info!(tool_name, "Checking secondary tool violations for '{}'", tool_name);
+        tracing::debug!(tool_name, "Checking secondary tool violations for '{}'", tool_name);
 
 
-        tracing::info!("messages: {:?}", messages.len());
-        tracing::info!("messages: {:?}", messages);
+        tracing::debug!("messages: {:?}", messages.len());
+        tracing::debug!("messages: {:?}", messages);
         // Find the most recent user message by iterating from the end,
         // but skip messages that are tool responses (i.e., user messages that are ToolResponse)
         let last_user_idx = messages.iter().enumerate().rev().find_map(|(i, m)| {
@@ -207,16 +207,16 @@ impl PromptInjectionScanner {
             None => messages,    // no user message at all; scan everything
         };
 
-        tracing::info!("last_user_idx: {:?}", last_user_idx);
-        tracing::info!("scan_range: {:?}", scan_range);
+        tracing::debug!("last_user_idx: {:?}", last_user_idx);
+        tracing::debug!("scan_range: {:?}", scan_range);
 
         for (msg_idx, msg) in scan_range.iter().enumerate().rev() {
             for content in &msg.content {
                 if let Some(offending) = self.tool_name_from_content(content) {
-                    tracing::info!("offending tool_name: {:?}", offending);
+                    tracing::debug!("offending tool_name: {:?}", offending);
                     if offending != tool_name
                     {
-                        tracing::info!(
+                        tracing::debug!(
                             offending_tool = offending,
                             expected_tool = tool_name,
                             msg_index = msg_idx,
@@ -230,7 +230,7 @@ impl PromptInjectionScanner {
             }
         }
 
-        tracing::info!("No secondary tool violation for '{}'", tool_name);
+        tracing::debug!("No secondary tool violation for '{}'", tool_name);
         false
     }
 
@@ -280,19 +280,6 @@ impl PromptInjectionScanner {
             Value::Null => {}
         }
     }
-}
-
-/// Extract tool call names from a message's content
-fn get_tool_call_names(message: &Message) -> Vec<String> {
-    let mut names = Vec::new();
-    for content in &message.content {
-        if let MessageContent::ToolRequest(req) = content {
-            if let Ok(tool_call) = &req.tool_call {
-                names.push(tool_call.name.clone());
-            }
-        }
-    }
-    names
 }
 
 impl Default for PromptInjectionScanner {
