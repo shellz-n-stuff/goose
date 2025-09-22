@@ -99,11 +99,9 @@ impl SecurityManager {
                     tool_args = ?tool_call.arguments,
                     "🔍 Starting security analysis for current tool call"
                 );
-
-                // Analyze only the current tool call content, not the entire conversation history
-                // This prevents re-analyzing and re-flagging historical malicious content
+                
                 let analysis_result = scanner
-                    .analyze_tool_call_with_context(tool_call, &[]) // Pass empty messages to avoid historical analysis
+                    .analyze_tool_call_with_context(tool_call, messages)
                     .await?;
 
                 // Get threshold from config - only flag things above threshold
