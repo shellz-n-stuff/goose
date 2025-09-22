@@ -293,6 +293,151 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn msg_user_text(text: &str, created: i64) -> Message {
+        let v = json!({
+            "id": null,
+            "role": "user",
+            "created": created,
+            "content": [
+                { "type": "text", "text": text }
+            ],
+            "metadata": {}
+        });
+        serde_json::from_value(v).expect("deserialize user message")
+    }
+
+    fn msg_assistant_tool_request(tool_name: &str, created: i64) -> Message {
+        let v = json!({
+            "id": null,
+            "role": "assistant",
+            "created": created,
+            "content": [
+                {
+                    "type": "toolRequest",
+                    "id": "tool_req_1",
+                    "toolCall": {
+                        "status": "success",
+                        "value": {
+                            "name": tool_name,
+                            "arguments": {}
+                        }
+                    }
+                }
+            ],
+            "metadata": {}
+        });
+        serde_json::from_value(v).expect("deserialize assistant toolRequest")
+    }
+
+    fn disabled(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    // Secondary tool violation tests
+
+    #[tokio::test]
+    async fn secondary_violation_when_different_tool_after_last_user() {
+        let scanner = PromptInjectionScanner::new();
+
+        // Last user at idx 0; after that, an assistant tool call (different tool).
+        let messages = vec![
+            msg_user_text("please chart then run shell", 100),
+            msg_assistant_tool_request("autovisualiser__render_donut", 101),
+        ];
+
+        let current = ToolCall {
+            name: "developer__shell".into(),
+            arguments: json!({ "command": "echo hi" }),
+        };
+        let disabled_list = disabled(&["developer__shell"]);
+
+        let violate = scanner
+            .is_secondary_tool_violation_single(&current, &messages, &disabled_list)
+            .await;
+
+        assert!(violate, "should flag when a different tool-call occurred after the last user");
+    }
+
+    #[tokio::test]
+    async fn no_violation_when_only_same_tool_after_last_user() {
+        let scanner = PromptInjectionScanner::new();
+
+        let messages = vec![
+            msg_user_text("please run shell", 200),
+            msg_assistant_tool_request("developer__shell", 201),
+        ];
+
+        let current = ToolCall {
+            name: "developer__shell".into(),
+            arguments: json!({ "command": "ls -la" }),
+        };
+        let disabled_list = disabled(&["developer__shell"]);
+
+        let violate = scanner
+            .is_secondary_tool_violation_single(&current, &messages, &disabled_list)
+            .await;
+
+        assert!(
+            !violate,
+            "should NOT flag when only the same tool has been called since the last user"
+        );
+    }
+
+    #[tokio::test]
+    async fn scans_all_when_no_user_messages() {
+        let scanner = PromptInjectionScanner::new();
+
+        // No user at all -> scan whole history
+        let messages = vec![
+            msg_assistant_tool_request("autovisualiser__render_donut", 300),
+            msg_assistant_tool_request("some_other_tool", 301),
+        ];
+
+        let current = ToolCall {
+            name: "developer__shell".into(),
+            arguments: json!({}),
+        };
+        let disabled_list = disabled(&["developer__shell"]);
+
+        let violate = scanner
+            .is_secondary_tool_violation_single(&current, &messages, &disabled_list)
+            .await;
+
+        assert!(
+            violate,
+            "with no user, scanning all should find a different prior tool -> violation"
+        );
+    }
+
+    #[tokio::test]
+    async fn early_exit_when_current_tool_not_disabled() {
+        let scanner = PromptInjectionScanner::new();
+
+        let messages = vec![
+            msg_user_text("do stuff", 400),
+            msg_assistant_tool_request("autovisualiser__render_donut", 401),
+        ];
+
+        let current = ToolCall {
+            name: "developer__shell".into(),
+            arguments: json!({}),
+        };
+        // current tool NOT in disabled list -> function should skip and return false
+        let disabled_list = disabled(&["some_other_tool"]);
+
+        let violate = scanner
+            .is_secondary_tool_violation_single(&current, &messages, &disabled_list)
+            .await;
+
+        assert!(
+            !violate,
+            "should not run the check at all if current tool isn't in the disabled list"
+        );
+    }
+
+
+    // Dangerous pattern tests
+
     #[tokio::test]
     async fn test_dangerous_command_detection() {
         let scanner = PromptInjectionScanner::new();
