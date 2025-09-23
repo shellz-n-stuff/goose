@@ -99,7 +99,7 @@ impl SecurityManager {
                     tool_args = ?tool_call.arguments,
                     "🔍 Starting security analysis for current tool call"
                 );
-                
+
                 let analysis_result = scanner
                     .analyze_tool_call_with_context(tool_call, messages)
                     .await?;

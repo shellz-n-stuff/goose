@@ -2,9 +2,8 @@ use crate::conversation::message::{Message, MessageContent};
 use crate::security::patterns::{PatternMatcher, RiskLevel};
 use anyhow::Result;
 use mcp_core::tool::ToolCall;
-use mcp_core::ToolResult;
-use serde_json::Value;
 use rmcp::model::Role;
+use serde_json::Value;
 
 /// Result of a security scan.
 #[derive(Debug, Clone)]
@@ -54,7 +53,7 @@ impl PromptInjectionScanner {
                     .and_then(|v| v.as_array())
                     .cloned()
             })
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
 
         let result: Vec<String> = disabled_list
             .iter()
@@ -81,7 +80,10 @@ impl PromptInjectionScanner {
             .is_secondary_tool_violation_single(tool_call, messages, &disabled_secondary_tool_list)
             .await
         {
-            tracing::warn!("Secondary tool violation detected for tool '{}'", tool_call.name);
+            tracing::warn!(
+                "Secondary tool violation detected for tool '{}'",
+                tool_call.name
+            );
             return Ok(ScanResult {
                 is_malicious: true,
                 confidence: 1.0,
@@ -181,19 +183,31 @@ impl PromptInjectionScanner {
     ) -> bool {
         let tool_name = tool_call.name.as_str();
         if !disabled_secondary_tool_list.iter().any(|t| t == tool_name) {
-            tracing::debug!(tool_name, "Tool '{}' not in disabled list; skipping", tool_name);
+            tracing::debug!(
+                tool_name,
+                "Tool '{}' not in disabled list; skipping",
+                tool_name
+            );
             return false;
         }
 
-        tracing::debug!(tool_name, "Checking secondary tool violations for '{}'", tool_name);
-
+        tracing::debug!(
+            tool_name,
+            "Checking secondary tool violations for '{}'",
+            tool_name
+        );
 
         tracing::debug!("messages: {:?}", messages.len());
         tracing::debug!("messages: {:?}", messages);
         // Find the most recent user message by iterating from the end,
         // but skip messages that are tool responses (i.e., user messages that are ToolResponse)
         let last_user_idx = messages.iter().enumerate().rev().find_map(|(i, m)| {
-            if m.role == Role::User && !m.content.iter().any(|c| matches!(c, MessageContent::ToolResponse(_))) {
+            if m.role == Role::User
+                && !m
+                    .content
+                    .iter()
+                    .any(|c| matches!(c, MessageContent::ToolResponse(_)))
+            {
                 Some(i)
             } else {
                 None
@@ -203,8 +217,8 @@ impl PromptInjectionScanner {
         // We want to scan **after** the last user message
         let scan_range: &[Message] = match last_user_idx {
             Some(idx) if idx + 1 < messages.len() => &messages[idx + 1..],
-            Some(_) => &[],      // last message is user; nothing to scan
-            None => messages,    // no user message at all; scan everything
+            Some(_) => &[],   // last message is user; nothing to scan
+            None => messages, // no user message at all; scan everything
         };
 
         tracing::debug!("last_user_idx: {:?}", last_user_idx);
@@ -214,8 +228,7 @@ impl PromptInjectionScanner {
             for content in &msg.content {
                 if let Some(offending) = self.tool_name_from_content(content) {
                     tracing::debug!("offending tool_name: {:?}", offending);
-                    if offending != tool_name
-                    {
+                    if offending != tool_name {
                         tracing::debug!(
                             offending_tool = offending,
                             expected_tool = tool_name,
@@ -233,7 +246,6 @@ impl PromptInjectionScanner {
         tracing::debug!("No secondary tool violation for '{}'", tool_name);
         false
     }
-
 
     /// Extract relevant content from a tool call for analysis.
     fn extract_tool_content(&self, tool_call: &ToolCall) -> String {
@@ -355,7 +367,10 @@ mod tests {
             .is_secondary_tool_violation_single(&current, &messages, &disabled_list)
             .await;
 
-        assert!(violate, "should flag when a different tool-call occurred after the last user");
+        assert!(
+            violate,
+            "should flag when a different tool-call occurred after the last user"
+        );
     }
 
     #[tokio::test]
@@ -434,7 +449,6 @@ mod tests {
             "should not run the check at all if current tool isn't in the disabled list"
         );
     }
-
 
     // Dangerous pattern tests
 
