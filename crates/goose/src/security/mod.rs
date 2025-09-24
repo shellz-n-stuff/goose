@@ -105,7 +105,7 @@ impl SecurityManager {
                     .await?;
 
                 // Get threshold from config - only flag things above threshold
-                let config_threshold = scanner.get_threshold_from_config();
+                let config_threshold = scanner.get_confidence_threshold_from_config();
 
                 if analysis_result.is_malicious && analysis_result.confidence > config_threshold {
                     // Generate a unique finding ID based on normalized tool call content

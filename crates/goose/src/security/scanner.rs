@@ -5,7 +5,6 @@ use mcp_core::tool::ToolCall;
 use rmcp::model::Role;
 use serde_json::Value;
 
-/// Result of a security scan.
 #[derive(Debug, Clone)]
 pub struct ScanResult {
     pub is_malicious: bool,
@@ -13,21 +12,19 @@ pub struct ScanResult {
     pub explanation: String,
 }
 
-/// Scanner for prompt injection and tool misuse.
 pub struct PromptInjectionScanner {
     pattern_matcher: PatternMatcher,
 }
 
 impl PromptInjectionScanner {
-    /// Create a new scanner.
     pub fn new() -> Self {
         Self {
             pattern_matcher: PatternMatcher::new(),
         }
     }
 
-    /// Get the maliciousness threshold from config, or use default.
-    pub fn get_threshold_from_config(&self) -> f32 {
+    /// Get the confidence threshold from config, or use default.
+    pub fn get_confidence_threshold_from_config(&self) -> f32 {
         use crate::config::Config;
         let config = Config::global();
 
@@ -102,11 +99,6 @@ impl PromptInjectionScanner {
         self.scan_for_dangerous_patterns(system_prompt).await
     }
 
-    /// Scan text for prompt injection (legacy compatibility).
-    pub async fn scan_with_prompt_injection_model(&self, text: &str) -> Result<ScanResult> {
-        self.scan_for_dangerous_patterns(text).await
-    }
-
     /// Core pattern matching logic for dangerous content.
     pub async fn scan_for_dangerous_patterns(&self, text: &str) -> Result<ScanResult> {
         let matches = self.pattern_matcher.scan_text(text);
@@ -174,7 +166,7 @@ impl PromptInjectionScanner {
             _ => None,
         }
     }
-
+    
     async fn is_secondary_tool_violation_single(
         &self,
         tool_call: &ToolCall,
@@ -191,14 +183,6 @@ impl PromptInjectionScanner {
             return false;
         }
 
-        tracing::debug!(
-            tool_name,
-            "Checking secondary tool violations for '{}'",
-            tool_name
-        );
-
-        tracing::debug!("messages: {:?}", messages.len());
-        tracing::debug!("messages: {:?}", messages);
         // Find the most recent user message by iterating from the end,
         // but skip messages that are tool responses (i.e., user messages that are ToolResponse)
         let last_user_idx = messages.iter().enumerate().rev().find_map(|(i, m)| {
@@ -220,19 +204,22 @@ impl PromptInjectionScanner {
             Some(_) => &[],   // last message is user; nothing to scan
             None => messages, // no user message at all; scan everything
         };
-
-        tracing::debug!("last_user_idx: {:?}", last_user_idx);
-        tracing::debug!("scan_range: {:?}", scan_range);
-
-        for (msg_idx, msg) in scan_range.iter().enumerate().rev() {
+        
+        for msg in scan_range.iter().rev() {
+            if msg.role == Role::User
+                && !msg
+                    .content
+                    .iter()
+                    .any(|c| matches!(c, MessageContent::ToolResponse(_)))
+            {
+                break;
+            }
             for content in &msg.content {
                 if let Some(offending) = self.tool_name_from_content(content) {
-                    tracing::debug!("offending tool_name: {:?}", offending);
                     if offending != tool_name {
                         tracing::debug!(
                             offending_tool = offending,
                             expected_tool = tool_name,
-                            msg_index = msg_idx,
                             "Secondary tool violation: found '{}' (expected '{}') after last user message",
                             offending,
                             tool_name
